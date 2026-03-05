@@ -1,19 +1,27 @@
 import streamlit as st
 import pandas as pd
 import joblib
+import plotly.graph_objects as go
+
+# Load trained pipeline and feature list
 
 pipeline = joblib.load("model/pipeline.pkl")
 feature_cols = joblib.load("model/feature_columns.pkl")
 
+# Page config
+
 st.set_page_config(
-    page_title="Customer Risk Dashboard",
-    page_icon="📊",
-    layout="wide"
+page_title="Customer Risk Dashboard",
+page_icon="📊",
+layout="wide"
 )
 
-# ---------- Header ----------
+# ---------------- HEADER ----------------
+
 st.markdown("""
+
 # 🧠 Customer Risk Prediction Dashboard
+
 Predict customer risk behaviour using demographic and spending data.
 """)
 
@@ -21,16 +29,17 @@ st.caption("💰 All monetary values are in Indian Rupees (₹)")
 
 st.divider()
 
-# ---------- Sidebar ----------
+# ---------------- SIDEBAR INPUTS ----------------
+
 st.sidebar.title("⚙ Customer Inputs")
 
 age = st.sidebar.slider("Age", 18, 70, 30)
 income = st.sidebar.number_input("Annual Income (₹)", 10000, 2000000, 500000)
 children = st.sidebar.slider("Children", 0, 5, 1)
 
-gender = st.sidebar.selectbox("Gender", ["Male","Female"])
-marital = st.sidebar.selectbox("Marital Status", ["Single","Married","Divorced"])
-education = st.sidebar.selectbox("Education", ["Basic","Bachelor","Master","PhD"])
+gender = st.sidebar.selectbox("Gender", ["Male", "Female"])
+marital = st.sidebar.selectbox("Marital Status", ["Single", "Married", "Divorced"])
+education = st.sidebar.selectbox("Education", ["Basic", "Bachelor", "Master", "PhD"])
 
 st.sidebar.divider()
 st.sidebar.subheader("Shopping Behaviour")
@@ -41,7 +50,8 @@ grocery = st.sidebar.slider("Grocery Spend (₹)", 0, 100000, 5000)
 
 total = fashion + electronics + grocery
 
-# ---------- Dashboard Metrics ----------
+# ---------------- DASHBOARD SUMMARY ----------------
+
 st.subheader("Customer Summary")
 
 col1, col2, col3 = st.columns(3)
@@ -52,69 +62,95 @@ col3.metric("👨‍👩‍👧 Children", children)
 
 st.divider()
 
-# ---------- Tabs ----------
+# ---------------- TABS ----------------
+
 tab1, tab2 = st.tabs(["Prediction", "Input Summary"])
 
-# ---------- Prediction ----------
+# ---------------- PREDICTION ----------------
+
 with tab1:
 
-   if st.button("🚀 Predict Customer Risk"):
+    if st.button("🚀 Predict Customer Risk"):
 
-    with st.spinner("Analyzing customer profile..."):
+        with st.spinner("Analyzing customer profile..."):
 
-        row = {col:0 for col in feature_cols}
+            row = {col: 0 for col in feature_cols}
 
-        row["Age"] = age
-        row["Annual_Income"] = income
-        row["Children"] = children
+            row["Age"] = age
+            row["Annual_Income"] = income
+            row["Children"] = children
 
-        row["Category_Fashion_Spend"] = fashion
-        row["Category_Electronics_Spend"] = electronics
-        row["Category_Grocery_Spend"] = grocery
-        row["Total_Spend"] = total
+            row["Category_Fashion_Spend"] = fashion
+            row["Category_Electronics_Spend"] = electronics
+            row["Category_Grocery_Spend"] = grocery
+            row["Total_Spend"] = total
 
-        if total > 0:
-            row["Fashion_to_Total"] = fashion/total
-            row["Electronics_to_Total"] = electronics/total
-            row["Grocery_to_Total"] = grocery/total
+            if total > 0:
+                row["Fashion_to_Total"] = fashion / total
+                row["Electronics_to_Total"] = electronics / total
+                row["Grocery_to_Total"] = grocery / total
 
-        row["Income_per_Person"] = income/(children+1)
+            row["Income_per_Person"] = income / (children + 1)
 
-        if f"Gender_{gender}" in row:
-            row[f"Gender_{gender}"] = 1
+            if f"Gender_{gender}" in row:
+                row[f"Gender_{gender}"] = 1
 
-        if f"Marital_Status_{marital}" in row:
-            row[f"Marital_Status_{marital}"] = 1
+            if f"Marital_Status_{marital}" in row:
+                row[f"Marital_Status_{marital}"] = 1
 
-        if f"Education_{education}" in row:
-            row[f"Education_{education}"] = 1
+            if f"Education_{education}" in row:
+                row[f"Education_{education}"] = 1
 
-        df = pd.DataFrame([row])
+            df = pd.DataFrame([row])
 
-        prediction = pipeline.predict(df)[0]
+            prediction = int(pipeline.predict(df)[0])
+            proba = pipeline.predict_proba(df).max() * 100
 
-    st.success("Prediction Complete")
-    st.metric("Customer Risk Score", prediction)
+        st.success("Prediction Complete")
 
-    if prediction > 70:
-        st.error("⚠ High Risk Customer")
+        # Risk message
+        if prediction <= 2:
+            st.success("✅ Low Risk Customer")
+        elif prediction == 3:
+            st.warning("⚡ Medium Risk Customer")
+        else:
+            st.error("⚠ High Risk Customer")
 
-    elif prediction > 40:
-        st.warning("⚡ Medium Risk Customer")
+        st.metric("Risk Score (1–5)", prediction)
+        st.metric("Model Confidence", f"{proba:.1f}%")
 
-    else:
-        st.success("✅ Low Risk Customer")
+        # ---------- Gauge Meter ----------
+        import plotly.graph_objects as go
 
-# ---------- Input Summary ----------
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=prediction,
+            title={'text': "Customer Risk Score"},
+            gauge={
+                'axis': {'range': [1, 5]},
+                'steps': [
+                    {'range': [1, 2], 'color': "#2ecc71"},
+                    {'range': [2, 3], 'color': "#f1c40f"},
+                    {'range': [3, 5], 'color': "#e74c3c"}
+                ],
+            }
+        ))
+
+        st.plotly_chart(fig, width="stretch")
+
+
+
+# ---------------- INPUT SUMMARY ----------------
+
 with tab2:
 
-    data = {
-        "Age": age,
-        "Income": income,
-        "Children": children,
-        "Fashion Spend": fashion,
-        "Electronics Spend": electronics,
-        "Grocery Spend": grocery
-    }
+ data = {
+    "Age": age,
+    "Income": income,
+    "Children": children,
+    "Fashion Spend": fashion,
+    "Electronics Spend": electronics,
+    "Grocery Spend": grocery
+}
 
-    st.table(pd.DataFrame(data.items(), columns=["Feature","Value"]))
+ st.table(pd.DataFrame(data.items(), columns=["Feature", "Value"]))
